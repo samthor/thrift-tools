@@ -39,6 +39,8 @@ export interface ThriftReader {
   readStructBegin(): void;
   readStructEnd(): void;
 
+  readFieldKey(): number;
+
   readFieldBegin(): FieldInfo;
   readFieldEnd(): void;
 
@@ -74,22 +76,3 @@ export function readList(input: ThriftReader, type: ThriftType, reader: () => an
   return out;
 }
 
-export function readFastList(input: ThriftReader, type: ThriftType, reader: () => any) {
-  const { etype, size } = input.readListBegin();
-
-  if (etype !== type || size === 0) {
-    for (let i = 0; i < size; ++i) {
-      input.skip(etype);
-    }
-    // input.readListEnd();
-    return [];
-  }
-
-  // prealloc array gives small speedup
-  const out = new Array(size);
-  for (let i = 0; i < size; ++i) {
-    out[i] = reader();
-  }
-  // input.readListEnd();
-  return out;
-}

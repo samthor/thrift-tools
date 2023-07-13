@@ -3,10 +3,7 @@ import { ObjectType, ThriftFile } from './parser.js';
 // Not required for compact protocol
 const INCLUDE_COMPACT_NOOP = false;
 
-const preamble =
-  `import { type ThriftReader, ` +
-  (INCLUDE_COMPACT_NOOP ? 'readList' : 'readFastList') +
-  ` } from './compiler-deps.ts';\n\n`;
+const preamble = `import { type ThriftReader, readList } from './compiler-deps.ts';\n\n`;
 
 export function renderRo(tf: ThriftFile) {
   const parts = Object.entries(tf.types).map(([name, o]) => {
@@ -51,7 +48,6 @@ export function renderRo(tf: ThriftFile) {
       if (e.length === 0) {
         lines.push(`const _${name}_zeroInstance = new ${name}();`);
       }
-
     }
 
     return lines.join('\n') + '\n\n';
@@ -64,7 +60,7 @@ export function renderRo(tf: ThriftFile) {
 function constructReaderFor(tf: ThriftFile, o: ObjectType) {
   const switchCode = Object.entries(o.records).map(([name, or]) => {
     const t = typeToTS(tf, or.type);
-    const key = (t.thrift << 8) + or.fieldId;
+    const key = (or.fieldId << 8) + t.thrift;
 
     const lines: string[] = [];
     lines.push(`    case ${key}: {`);
@@ -83,8 +79,7 @@ function constructReaderFor(tf: ThriftFile, o: ObjectType) {
     lines = [
       `input.readStructBegin();`,
       `for (;;) {`,
-      `  const { ftype, fid } = input.readFieldBegin();`,
-      `  const key = (ftype << 8) + fid;`,
+      `  const key = input.readFieldKey();`,
       `  switch (key) {`,
       `    case 0: {`,
       `      input.readStructEnd();`,
@@ -148,10 +143,7 @@ function typeToTS(tf: ThriftFile, type: string): ConvertedType {
     const innerRaw = type.substring(5, type.length - 1);
     const inner = typeToTS(tf, innerRaw);
 
-    let reader =
-      (INCLUDE_COMPACT_NOOP ? 'readList' : 'readFastList') +
-      `(input, ${inner.thrift}, () => ${inner.reader})`;
-
+    const reader = `readList(input, ${inner.thrift}, () => ${inner.reader})`;
     return {
       type: `Array<${inner.type}>`,
       default: '[]',
