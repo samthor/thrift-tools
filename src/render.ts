@@ -9,15 +9,15 @@ export function renderRo(tf: ThriftFile) {
     lines.push(`// ${o.type} ${name}`);
 
     if (o.type === 'enum') {
-      lines.push(`enum ${name} {`);
+      lines.push(`export enum ${name} {`);
       lines.push(
         ...Object.entries(o.options).map(([name, r]) => {
-          return `  ${name} = ${r};`;
+          return `  ${name} = ${r},`;
         }),
       );
       lines.push(`}`);
     } else {
-      lines.push(`class ${name} {`);
+      lines.push(`export class ${name} {`);
 
       const e = Object.entries(o.records);
 
@@ -68,6 +68,7 @@ function constructReaderFor(tf: ThriftFile, o: ObjectType) {
     // special-case no valid fields
     lines = [
       `input.skip(12);`,
+      `return this;`,
     ];
   } else {
     lines = [
