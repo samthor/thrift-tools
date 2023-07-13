@@ -87,7 +87,7 @@ function constructReaderFor(tf: ThriftFile, o: ObjectType) {
       `    }`,
       ...switchCode.flat(),
       `    default: {`,
-      `      input.skip(ftype);`,
+      `      input.skip(key & 0xff);`,
       `    }`,
       `  }`,
       INCLUDE_COMPACT_NOOP ? `  input.readFieldEnd();` : '  // skip readFieldEnd',
