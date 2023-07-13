@@ -1,6 +1,12 @@
 import { ObjectType, ThriftFile } from './parser.js';
 
-const preamble = `import { type ThriftReader, readList } from './compiler-deps.ts';\n\n`;
+// Not required for compact protocol
+const INCLUDE_COMPACT_NOOP = false;
+
+const preamble =
+  `import { type ThriftReader, ` +
+  (INCLUDE_COMPACT_NOOP ? 'readList' : 'readFastList') +
+  ` } from './compiler-deps.ts';\n\n`;
 
 export function renderRo(tf: ThriftFile) {
   const parts = Object.entries(tf.types).map(([name, o]) => {
@@ -40,6 +46,12 @@ export function renderRo(tf: ThriftFile) {
       lines.push(`  }`);
 
       lines.push(`}`);
+
+      // create default instance as there's no fields here
+      if (e.length === 0) {
+        lines.push(`const _${name}_zeroInstance = new ${name}();`);
+      }
+
     }
 
     return lines.join('\n') + '\n\n';
@@ -66,10 +78,7 @@ function constructReaderFor(tf: ThriftFile, o: ObjectType) {
 
   if (switchCode.length === 0) {
     // special-case no valid fields
-    lines = [
-      `input.skip(12);`,
-      `return this;`,
-    ];
+    lines = [`input.skip(12);`, `return this;`];
   } else {
     lines = [
       `input.readStructBegin();`,
@@ -86,7 +95,7 @@ function constructReaderFor(tf: ThriftFile, o: ObjectType) {
       `      input.skip(ftype);`,
       `    }`,
       `  }`,
-      `  input.readFieldEnd();`,
+      INCLUDE_COMPACT_NOOP ? `  input.readFieldEnd();` : '  // skip readFieldEnd',
       `}`,
     ];
   }
@@ -139,10 +148,14 @@ function typeToTS(tf: ThriftFile, type: string): ConvertedType {
     const innerRaw = type.substring(5, type.length - 1);
     const inner = typeToTS(tf, innerRaw);
 
+    let reader =
+      (INCLUDE_COMPACT_NOOP ? 'readList' : 'readFastList') +
+      `(input, ${inner.thrift}, () => ${inner.reader})`;
+
     return {
       type: `Array<${inner.type}>`,
       default: '[]',
-      reader: `readList(input, ${inner.thrift}, () => ${inner.reader})`,
+      reader,
       thrift: 15,
       wrap: inner,
     };
@@ -163,8 +176,15 @@ function typeToTS(tf: ThriftFile, type: string): ConvertedType {
     return { type, default: `${type}.${first[0]}`, reader: 'input.readI32()', thrift: 8 };
   }
 
+  // We can short-circuit for zero instance.
+  let structDefault = `new ${type}()`;
+  if (Object.entries(r.records).length === 0) {
+    structDefault = `_${type}_zeroInstance`;
+  }
+  let structReader = `${structDefault}.read(input)`;
+
   // assume struct now
-  return { type, default: `new ${type}()`, reader: `(new ${type}()).read(input)`, thrift: 12 };
+  return { type, default: structDefault, reader: structReader, thrift: 12 };
 }
 
 function firstEntryOf<X extends string | number | symbol, Y>(o: Record<X, Y>): [X, Y] {
