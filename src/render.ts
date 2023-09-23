@@ -1,11 +1,30 @@
-import { ObjectType, ThriftFile } from './parser.js';
+import { CompactProtocolType } from './deps/compiler-deps.js';
+import type { RenderOptions } from './options.js';
+import { type ObjectType, ThriftFile, TemplateType } from './parser.js';
 
-// Not required for compact protocol
-const INCLUDE_COMPACT_NOOP = false;
+type RenderContext = {
+  options: Required<RenderOptions>;
+  tf: ThriftFile;
+};
 
-const preamble = `import { type ThriftReader, readList } from './compiler-deps.ts';\n\n`;
+export function renderRo(tf: ThriftFile | string, sourceOptions: RenderOptions = {}) {
+  if (typeof tf === 'string') {
+    const source = tf;
+    tf = new ThriftFile();
+    tf.parse(source);
+  }
 
-export function renderRo(tf: ThriftFile) {
+  const rc: RenderContext = {
+    options: Object.assign(
+      {
+        zeroInstance: true,
+        toolImport: 'thrift-tools',
+      },
+      sourceOptions,
+    ),
+    tf,
+  };
+
   const parts = Object.entries(tf.types).map(([name, o]) => {
     const lines: string[] = [];
 
@@ -27,16 +46,16 @@ export function renderRo(tf: ThriftFile) {
       // property definitions
       lines.push(
         ...e.map(([name, r]) => {
-          const t = typeToTS(tf, r.type);
-          if (r.required) {
-            return `  ${name}: ${t.type} = ${t.default};`;
+          const t = typeToTS(rc, r.type);
+          if (r.required || r.defaultValue) {
+            return `  ${name}: ${t.type} = ${r.defaultValue ?? t.default};`;
           }
           return `  ${name}?: ${t.type};`;
         }),
       );
 
       // reader
-      const r = constructReaderFor(tf, o);
+      const r = constructReaderFor(rc, o);
       const innerLines = r.split('\n');
       lines.push(`  read(input: ThriftReader): ${name} {`);
       lines.push(...innerLines.map((x) => (`    ` + x).trimEnd()));
@@ -45,7 +64,7 @@ export function renderRo(tf: ThriftFile) {
       lines.push(`}`);
 
       // create default instance as there's no fields here
-      if (e.length === 0) {
+      if (rc.options.zeroInstance && e.length === 0) {
         lines.push(`const _${name}_zeroInstance = new ${name}();`);
       }
     }
@@ -53,20 +72,22 @@ export function renderRo(tf: ThriftFile) {
     return lines.join('\n') + '\n\n';
   });
 
+  const preamble =
+    `import { type ThriftReader, readList, readMap } ` +
+    `from ${JSON.stringify(rc.options.toolImport)};\n\n`;
   parts.unshift(preamble);
   return parts.join('');
 }
 
-function constructReaderFor(tf: ThriftFile, o: ObjectType) {
+function constructReaderFor(rc: RenderContext, o: ObjectType) {
   const switchCode = Object.entries(o.records).map(([name, or]) => {
-    const t = typeToTS(tf, or.type);
+    const t = typeToTS(rc, or.type);
     const key = (or.fieldId << 8) + t.thrift;
 
     const lines: string[] = [];
-    lines.push(`    case ${key}: {`);
+    lines.push(`    case ${key}:`);
     lines.push(`      this.${name} = ${t.reader};`);
     lines.push('      break;');
-    lines.push('    }');
     return lines.join('\n');
   });
 
@@ -79,18 +100,14 @@ function constructReaderFor(tf: ThriftFile, o: ObjectType) {
     lines = [
       `input.readStructBegin();`,
       `for (;;) {`,
-      `  const key = input.readFieldKey();`,
+      `  const key = input.readStructKey();`,
       `  switch (key) {`,
-      `    case 0: {`,
-      `      input.readStructEnd();`,
+      `    case 0:`,
       `      return this;`,
-      `    }`,
       ...switchCode.flat(),
-      `    default: {`,
+      `    default:`,
       `      input.skip(key & 0xff);`,
-      `    }`,
       `  }`,
-      INCLUDE_COMPACT_NOOP ? `  input.readFieldEnd();` : '  // skip readFieldEnd',
       `}`,
     ];
   }
@@ -102,62 +119,81 @@ type ConvertedType = {
   type: string;
   default: string;
   reader: string;
-  thrift: number;
-  wrap?: ConvertedType;
+  thrift: CompactProtocolType;
 };
 
-function typeToTS(tf: ThriftFile, type: string): ConvertedType {
+function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType {
+  if (typeof type !== 'string') {
+    return templateTypeToTS(rc, type);
+  }
+
   switch (type) {
     case 'i8':
-      return { type: 'number', default: '0', reader: 'input.readByte()', thrift: 3 };
+      return {
+        type: 'number',
+        default: '0',
+        reader: 'input.readByte()',
+        thrift: CompactProtocolType.CT_BYTE,
+      };
 
     case 'i16':
-      return { type: 'number', default: '0', reader: 'input.readI16()', thrift: 6 };
+      return {
+        type: 'number',
+        default: '0',
+        reader: 'input.readI16()',
+        thrift: CompactProtocolType.CT_I16,
+      };
 
     case 'i32':
-      return { type: 'number', default: '0', reader: 'input.readI32()', thrift: 8 };
+      return {
+        type: 'number',
+        default: '0',
+        reader: 'input.readI32()',
+        thrift: CompactProtocolType.CT_I32,
+      };
 
     case 'i64':
-      return { type: 'number', default: '0', reader: 'input.readI64()', thrift: 10 };
+      return {
+        type: 'number',
+        default: '0',
+        reader: 'input.readI64()',
+        thrift: CompactProtocolType.CT_I64,
+      };
 
     case 'bool':
-      return { type: 'boolean', default: 'false', reader: 'input.readBool()', thrift: 2 };
+      return {
+        type: 'boolean',
+        default: 'false',
+        reader: 'input.readBool()',
+        thrift: CompactProtocolType.CT_BOOLEAN_FALSE_OR_TYPE,
+      };
 
     case 'binary':
       return {
         type: 'Uint8Array',
         default: 'new Uint8Array()',
         reader: 'input.readBinary()',
-        thrift: 11,
+        thrift: CompactProtocolType.CT_BINARY,
+      };
+
+    case 'uuid':
+      return {
+        type: 'Uint8Array',
+        default: 'new Uint8Array()',
+        reader: 'input.readUUID()',
+        thrift: CompactProtocolType.CT_UUID,
       };
 
     case 'string':
-      return { type: 'string', default: `''`, reader: 'input.readString()', thrift: 11 };
+      return {
+        type: 'string',
+        default: `''`,
+        reader: 'input.readString()',
+        thrift: CompactProtocolType.CT_BINARY,
+      };
   }
 
-  if (type.startsWith('list<')) {
-    if (!type.endsWith('>')) {
-      throw new Error(`invalid list: ${type}`);
-    }
-
-    const innerRaw = type.substring(5, type.length - 1);
-    const inner = typeToTS(tf, innerRaw);
-
-    const reader = `readList(input, ${inner.thrift}, () => ${inner.reader})`;
-    return {
-      type: `Array<${inner.type}>`,
-      default: '[]',
-      reader,
-      thrift: 15,
-      wrap: inner,
-    };
-  }
-
-  if (type.includes('<')) {
-    throw new Error(`unsupported template type: ${type}`);
-  }
-
-  const r = tf.types[type];
+  const r = rc.tf.types[type];
   if (r === undefined) {
     throw new Error(`unknown type: ${type}`);
   }
@@ -165,18 +201,76 @@ function typeToTS(tf: ThriftFile, type: string): ConvertedType {
   if (r.type === 'enum') {
     // choose a sensible default
     const first = firstEntryOf(r.options);
-    return { type, default: `${type}.${first[0]}`, reader: 'input.readI32()', thrift: 8 };
+    return {
+      type,
+      default: `${type}.${first[0]}`,
+      reader: 'input.readI32()',
+      thrift: CompactProtocolType.CT_I32,
+    };
   }
 
   // We can short-circuit for zero instance.
   let structDefault = `new ${type}()`;
-  if (Object.entries(r.records).length === 0) {
+  if (rc.options.zeroInstance && Object.entries(r.records).length === 0) {
     structDefault = `_${type}_zeroInstance`;
   }
   let structReader = `${structDefault}.read(input)`;
 
   // assume struct now
-  return { type, default: structDefault, reader: structReader, thrift: 12 };
+  return {
+    type,
+    default: structDefault,
+    reader: structReader,
+    thrift: CompactProtocolType.CT_STRUCT,
+  };
+}
+
+function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType {
+  const inner = type.inner.map((t) => typeToTS(rc, t));
+
+  switch (type.outer) {
+    case 'map': {
+      if (inner.length !== 2) {
+        break;
+      }
+      const [key, value] = inner;
+      const mkey = (key.thrift << 4) + value.thrift;
+      return {
+        type: `Map<${key.type}, ${value.type}>`,
+        default: `new Map()`,
+        reader: `readMap(input, ${mkey}, () => ${key.reader}, () => ${value.reader})`,
+        thrift: CompactProtocolType.CT_MAP,
+      };
+    }
+
+    case 'set': {
+      if (type.inner.length !== 1) {
+        break;
+      }
+      return {
+        type: `Set<${inner[0].type}>`,
+        default: 'new Set()',
+        reader: `new Set(readList(input, ${inner[0].thrift}, () => ${inner[0].reader}))`,
+        thrift: CompactProtocolType.CT_SET,
+      };
+    }
+
+    case 'list': {
+      if (type.inner.length !== 1) {
+        break;
+      }
+      const [etype] = inner;
+
+      return {
+        type: `Array<${inner[0].type}>`,
+        default: '[]',
+        reader: `readList(input, ${inner[0].thrift}, () => ${inner[0].reader})`,
+        thrift: CompactProtocolType.CT_LIST,
+      };
+    }
+  }
+
+  throw new Error(`unsupported template type: ${JSON.stringify(type)}`);
 }
 
 function firstEntryOf<X extends string | number | symbol, Y>(o: Record<X, Y>): [X, Y] {

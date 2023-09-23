@@ -3,6 +3,7 @@ import * as moo from 'moo';
 const lexer = moo.default.compile({
   ws: /[ \t]+/,
   newline: { match: '\n', lineBreaks: true },
+  comma: ',',
   semi: ';',
   colon: ':',
   commentLine: /\/\/[^\n]*/,
@@ -18,13 +19,21 @@ const lexer = moo.default.compile({
   larrow: '<',
   rarrow: '>',
   equal: '=',
+  // from moo's homepage: https://github.com/no-context/moo
+  // this probably will fail at escaped things.
+  string: { match: /"(?:\\["\\]|[^\n"\\])*"/, value: (s) => s.slice(1, -1) },
 });
+
+export type TemplateType = {
+  outer: string;
+  inner: (string | TemplateType)[];
+};
 
 export type ObjectRecord = {
   fieldId: number;
-  type: string;
+  type: string | TemplateType;
   required?: boolean;
-  defaultValue?: number;
+  defaultValue?: number | string;
 };
 
 export type EnumType = {
@@ -165,8 +174,8 @@ export class ThriftFile {
             const equalsToken = this.#peek();
             if (equalsToken.type === 'equal') {
               expect('equal');
-              const valueToken = expect('int');
-              r.defaultValue = +valueToken.value;
+              const valueToken = expect(['int', 'string']);
+              r.defaultValue = valueToken.value;
             }
 
             o.records[fieldNameToken.value] = r;
@@ -180,22 +189,29 @@ export class ThriftFile {
     }
   }
 
-  #consumeType() {
+  #consumeType(): string | TemplateType {
     const expect = this.#expect.bind(this);
     const typeToken = expect('token');
 
-    let out = typeToken.value;
+    const outer = typeToken.value;
 
-    const next = this.#peek();
-    if (next.type === 'larrow') {
-      expect('larrow');
+    const maybeLarrow = this.#peek();
+    if (maybeLarrow.type !== 'larrow') {
+      return outer;
+    }
+    expect('larrow');
 
-      const inner = this.#consumeType();
-      out += `<${inner}>`;
+    const inner: (string | TemplateType)[] = [];
+    for (;;) {
+      const part = this.#consumeType();
+      inner.push(part);
 
-      expect('rarrow');
+      const next = expect(['rarrow', 'comma'], true);
+      if (next.type === 'rarrow') {
+        break;
+      }
     }
 
-    return out;
+    return { outer, inner };
   }
 }
