@@ -1,26 +1,18 @@
-// TODO: currently disused
-// export enum ThriftType {
-//   STOP = 0,
-//   VOID = 1,
-//   BOOL = 2,
-//   I08 = 3,
-//   BYTE = 3,
-//   DOUBLE = 4,
-//   I16 = 6,
-//   I32 = 8,
-//   I64 = 10,
-//   BYTES = 11,
-//   STRUCT = 12,
-//   MAP = 13,
-//   SET = 14,
-//   LIST = 15,
-//   UUID = 16,
-// }
+import type { CompactProtocolReader } from './reader.js';
 
 export enum CompactProtocolType {
   CT_STOP = 0,
-  CT_BOOLEAN_TRUE = 1, // true in struct
-  CT_BOOLEAN_FALSE_OR_TYPE = 2, // encoded false in struct, but generic bool type in list/set/map
+
+  /**
+   * This is a `true` encoded in a struct field.
+   */
+  CT_BOOLEAN_TRUE = 1,
+
+  /**
+   * This may be `false` encoded in a struct field, or the bool type argument of a list/set/map.
+   */
+  CT_BOOLEAN_FALSE_OR_TYPE = 2,
+
   CT_BYTE = 3,
   CT_I16 = 4,
   CT_I32 = 5,
@@ -31,9 +23,23 @@ export enum CompactProtocolType {
   CT_SET = 10,
   CT_MAP = 11,
   CT_STRUCT = 12,
-  CT_UUID = 13, // always 16 bytes long
+
+  /**
+   * UUIDs are encoded as exactly 16 bytes with no length header.
+   */
+  CT_UUID = 13,
 }
 
+/**
+ * Provides the minimum specifications to read Thrift encoded data. This is required by the
+ * `.read()` method on codegen classes created by `thrift-tools` to read from some source.
+ *
+ * You should just use the concrete implementation {@link CompactProtocolReader} unless you're
+ * doing something really weird.
+ *
+ * This is a simple definition that isn't async, and can't really be used to 'fetch more' during
+ * parsing (e.g., while data is arriving from a network).
+ */
 export interface ThriftReader {
   readStructBegin(): void;
   readStructKey(): number;
@@ -54,6 +60,9 @@ export interface ThriftReader {
   skipMany(count: number, type: CompactProtocolType, extraType?: number): void;
 }
 
+/**
+ * Helper to read a {@link Map}. Used by codegen created by `thrift-tools`.
+ */
 export function readMap<K, V>(
   input: ThriftReader,
   mkey: number,
@@ -74,7 +83,15 @@ export function readMap<K, V>(
   return m;
 }
 
-export function readList<T>(input: ThriftReader, type: CompactProtocolType, reader: () => T): Array<T> {
+/**
+ * Helper to read a {@link Array} (or a {@link Set}, as they are encoded the same way). Used by
+ * codegen created by `thrift-tools`.
+ */
+export function readList<T>(
+  input: ThriftReader,
+  type: CompactProtocolType,
+  reader: () => T,
+): Array<T> {
   const { type: ltype, length } = input.readListHeader();
 
   if (length === 0) {

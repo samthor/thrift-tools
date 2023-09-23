@@ -6,7 +6,7 @@ import test from 'node:test';
 import * as fs from 'node:fs';
 import * as url from 'node:url';
 import * as path from 'node:path';
-import { renderRo } from '../src/render.js';
+import { renderThrift } from '../src/render.js';
 import { ThriftFile } from '../src/parser.js';
 
 const testdataPath = url.fileURLToPath(new URL('./data/', import.meta.url));
@@ -28,7 +28,7 @@ test('samples can be rendered', (t) => {
     }
 
     try {
-      renderRo(tf);
+      renderThrift(tf);
     } catch (e) {
       console.warn('Could not render file');
       throw e;

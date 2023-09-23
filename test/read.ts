@@ -1,11 +1,11 @@
 import test from 'node:test';
-import { prepareRenderRo } from './helper.js';
+import { prepareRenderThrift } from './helper.js';
 import assert from 'node:assert';
 import { CompactProtocolType } from '../src/deps/compiler-deps.js';
-import { CompactProtocolReaderBuffer } from '../src/deps/reader.js';
+import { CompactProtocolReader } from '../src/deps/reader.js';
 
 test('read and import a simple thrift', async (t) => {
-  const mod = await prepareRenderRo(`
+  const mod = await prepareRenderThrift(`
   struct forTest {
     1: uuid foo;
     2: required list<bool> bar;
@@ -53,7 +53,7 @@ test('read and import a simple thrift', async (t) => {
     0,
   ]);
 
-  const reader = new CompactProtocolReaderBuffer(rawBytes);
+  const reader = new CompactProtocolReader(rawBytes);
   x.read(reader);
 
   assert.deepStrictEqual(x.bar, [true, false, true]);

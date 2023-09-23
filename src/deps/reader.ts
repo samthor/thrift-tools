@@ -3,7 +3,11 @@ import { readVarint32, readZigZagVarint32, readZigZagVarint53 } from './varint.j
 
 const dec = new TextDecoder();
 
-export abstract class CompactProtocolReader implements ThriftReader {
+/**
+ * An abstract class that can read the Thrift Compact Protocol. Bytes-related methods must be
+ * implemented for this to work.
+ */
+export abstract class AbstractCompactProtocolReader implements ThriftReader {
   private fieldIdStack: number[] = [];
   private fieldId: number = 0;
   private pendingBool?: boolean;
@@ -214,9 +218,10 @@ export abstract class CompactProtocolReader implements ThriftReader {
 }
 
 /**
- * Reads a Thrift-compact encoded stream from a concrete buffer.
+ * Reads a Thrift-compact encoded stream from a concrete buffer that is provided at construction
+ * time.
  */
-export class CompactProtocolReaderBuffer extends CompactProtocolReader {
+export class CompactProtocolReader extends AbstractCompactProtocolReader {
   private buf: Uint8Array;
   at: number;
 
@@ -246,5 +251,99 @@ export class CompactProtocolReaderBuffer extends CompactProtocolReader {
     const out = dv.getFloat64(0, true);
     this.at += 8;
     return out;
+  }
+}
+
+export class CompactProtocolReaderPoll_OutOfData extends Error {}
+
+/**
+ * Reads a Thrift-compact encoded stream from a source which may be polled for additional bytes.
+ *
+ * If there are no more bytes available, throws {@link CompactProtocolReaderPoll_OutOfData}. This
+ * could be used to reinitialize this class with more data. The reader code isn't async, so it's
+ * currently not possible to "get more" data from a source inline: this approach can be useful for
+ * reading/polling small parts of data of unknown size.
+ */
+export class CompactProtocolReaderPoll extends AbstractCompactProtocolReader {
+  private more: (min: number) => Uint8Array;
+  private pending: Uint8Array = new Uint8Array();
+  private at = 0;
+  private _consumed = 0;
+
+  get consumed() {
+    return this._consumed;
+  }
+
+  /**
+   * @param more To provide more bytes. Must always return >= min request.
+   */
+  constructor(arg: Uint8Array | ((min: number) => Uint8Array)) {
+    super();
+
+    if (arg instanceof Uint8Array) {
+      this.pending = arg;
+      this.more = () => {
+        throw new CompactProtocolReaderPoll_OutOfData();
+      };
+    } else {
+      this.more = arg;
+    }
+  }
+
+  private ensure(min: number) {
+    if (this.at + min <= this.pending.length) {
+      return; // ok!
+    }
+
+    const suffix = this.pending.subarray(this.at);
+    min -= suffix.length;
+
+    const update = this.more(min);
+    if (update.length < min) {
+      throw new CompactProtocolReaderPoll_OutOfData();
+    }
+
+    if (suffix.length) {
+      // Need to combine the remaining suffix with new data. Just create a new buffer, oh well.
+      this.pending = new Uint8Array(suffix.length + update.length);
+      this.pending.set(suffix);
+      this.pending.set(update, suffix.length);
+    } else {
+      // Can use verbatim, no prior data to keep.
+      this.pending = update;
+    }
+    this.at = 0;
+  }
+
+  readByte(): number {
+    this.ensure(1);
+    const out = this.pending[this.at];
+    ++this.at;
+    ++this._consumed;
+    return out;
+  }
+
+  readBytes(size: number): Uint8Array {
+    if (size === 0) {
+      return new Uint8Array();
+    } else if (size < 0) {
+      throw new TypeError(`Got -ve binary size: ${size}`);
+    }
+    this.ensure(size);
+    this._consumed += size;
+
+    const end = this.at + size;
+    const out = this.pending.subarray(this.at, end);
+    this.at = end;
+    return out;
+  }
+
+  skipBytes(size: number): void {
+    if (size < 0) {
+      throw new TypeError(`cannot skip -ve bytes: ${size}`);
+    }
+    this.ensure(size);
+    this._consumed += size;
+    this.at += size;
   }
 }

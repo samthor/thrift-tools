@@ -4,16 +4,21 @@
     "@types/node": "^20.3.1",
     "esbuild": "^0.18.4",
     "tsx": "^3.9.0",
-    "typescript": "^5.0.4"
+    "moo": "^0.5.2"
   },
   "type": "module",
   "scripts": {
     "test": "tsx test/"
   },
+  "bin": {
+    "thrift-tools": "./dist/bin/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./codegen": "./dist/codegen.js"
+  },
+  "main": "./dist/index.js",
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
-  "dependencies": {
-    "moo": "^0.5.2"
-  },
   "name": "thrift-tools"
 }

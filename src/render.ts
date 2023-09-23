@@ -7,7 +7,7 @@ type RenderContext = {
   tf: ThriftFile;
 };
 
-export function renderRo(tf: ThriftFile | string, sourceOptions: RenderOptions = {}) {
+export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptions = {}) {
   if (typeof tf === 'string') {
     const source = tf;
     tf = new ThriftFile();

@@ -2,7 +2,8 @@ import * as esbuild from 'esbuild';
 import * as url from 'node:url';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { renderRo } from '../src/render.js';
+import { renderThrift } from '../src/render.js';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const compilerDepsSource = fs.readFileSync(
@@ -19,8 +20,8 @@ export async function convertToImportUrl(s: string) {
   return `data:text/javascript;charset=utf-8;base64,${btoa(transformOut.code)}`;
 }
 
-export async function prepareRenderRo(s: string) {
-  const ts = renderRo(s, {
+export async function prepareRenderThrift(s: string) {
+  const ts = renderThrift(s, {
     toolImport: compilerDepsImport,
   });
   const js = await convertToImportUrl(ts);

@@ -1,0 +1,18 @@
+// TODO: currently not used vs the compact protocol types
+export enum ThriftType {
+  STOP = 0,
+  VOID = 1,
+  BOOL = 2,
+  I08 = 3,
+  BYTE = 3,
+  DOUBLE = 4,
+  I16 = 6,
+  I32 = 8,
+  I64 = 10,
+  BYTES = 11,
+  STRUCT = 12,
+  MAP = 13,
+  SET = 14,
+  LIST = 15,
+  UUID = 16,
+}
