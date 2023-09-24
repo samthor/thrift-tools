@@ -48,7 +48,8 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
         ...e.map(([name, r]) => {
           const t = typeToTS(rc, r.type);
           if (r.required || r.defaultValue) {
-            return `  ${name}: ${t.type} = ${r.defaultValue ?? t.default};`;
+            const defaultValue = cooerceDefault(t.type, r.defaultValue ?? t.default);
+            return `  ${name}: ${t.type} = ${defaultValue};`;
           }
           return `  ${name}?: ${t.type};`;
         }),
@@ -278,4 +279,11 @@ function firstEntryOf<X extends string | number | symbol, Y>(o: Record<X, Y>): [
     return [key, o[key]];
   }
   throw new Error(`no entries in record: ${o}`);
+}
+
+function cooerceDefault(type: string, cand: string | number) {
+  if (type === 'boolean') {
+    return Boolean(cand);
+  }
+  return String(cand);
 }

@@ -23,8 +23,8 @@ const lexer = mood.compile({
   rarrow: '>',
   equal: '=',
   // from moo's homepage: https://github.com/no-context/moo
-  // this probably will fail at escaped things.
-  string: { match: /"(?:\\["\\]|[^\n"\\])*"/, value: (s) => s.slice(1, -1) },
+  // this probably will fail at escaped things. includes start/end ""
+  string: { match: /"(?:\\["\\]|[^\n"\\])*"/ },
 });
 
 export type TemplateType = {
