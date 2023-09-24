@@ -29,5 +29,6 @@
   "main": "./dist/index.js",
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",
-  "name": "thrift-tools"
+  "name": "thrift-tools",
+  "version": "0.1.0"
 }
