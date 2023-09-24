@@ -62,7 +62,7 @@ The reader and generated code are pure JS and will work in the browser, Node, or
 ### Read Thrift Wire Format
 
 In some cases you might want to read values from the Thrift wire format directly, rather than specifically into a generated class.
-You can still use `CompactProtoclReader`:
+You can still use `CompactProtocolReader`:
 
 ```ts
 import { CompactProtocolReader } from 'thrift-tools';
