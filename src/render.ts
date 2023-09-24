@@ -5,6 +5,9 @@ import { type ObjectType, ThriftFile, TemplateType } from './parser.js';
 type RenderContext = {
   options: Required<RenderOptions>;
   tf: ThriftFile;
+  hasList?: true;
+  hasMap?: true;
+  hasStruct?: true;
 };
 
 export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptions = {}) {
@@ -39,6 +42,7 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
       );
       lines.push(`}`);
     } else {
+      rc.hasStruct = true;
       lines.push(`export class ${name} {`);
 
       const e = Object.entries(o.records);
@@ -73,10 +77,27 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
     return lines.join('\n') + '\n\n';
   });
 
-  const preamble =
-    `import { type ThriftReader, readList, readMap } ` +
-    `from ${JSON.stringify(rc.options.toolImport)};\n\n`;
-  parts.unshift(preamble);
+  let preamble = '';
+
+  if (rc.hasList || rc.hasMap) {
+    // Only include the used readList/readMap.
+    const options = [
+      'type ThriftReader',
+      rc.hasList ? 'readList' : '',
+      rc.hasMap ? 'readMap' : '',
+    ].filter((x) => x);
+    preamble = `import { ${options.join(', ')} }`;
+  } else if (rc.hasStruct) {
+    // We only need the type for TS
+    preamble = `import type { ThriftReader }`;
+  } else {
+    // no preamble here \o/
+  }
+
+  if (preamble) {
+    preamble += ` from ${JSON.stringify(rc.options.toolImport)};\n\n`;
+    parts.unshift(preamble);
+  }
   return parts.join('');
 }
 
@@ -234,6 +255,7 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
       if (inner.length !== 2) {
         break;
       }
+      rc.hasMap = true;
       const [key, value] = inner;
       const mkey = (key.thrift << 4) + value.thrift;
       return {
@@ -248,6 +270,7 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
       if (type.inner.length !== 1) {
         break;
       }
+      rc.hasList = true;
       return {
         type: `Set<${inner[0].type}>`,
         default: 'new Set()',
@@ -260,12 +283,12 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
       if (type.inner.length !== 1) {
         break;
       }
+      rc.hasList = true;
       const [etype] = inner;
-
       return {
-        type: `Array<${inner[0].type}>`,
+        type: `Array<${etype.type}>`,
         default: '[]',
-        reader: `readList(input, ${inner[0].thrift}, () => ${inner[0].reader})`,
+        reader: `readList(input, ${etype.thrift}, () => ${etype.reader})`,
         thrift: CompactProtocolType.CT_LIST,
       };
     }
