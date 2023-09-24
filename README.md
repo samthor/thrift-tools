@@ -21,7 +21,7 @@ This package has zero dependencies and does not include any native bindings.
 You can convert a ".thrift" file to a helper by running the script:
 
 ```bash
-npm run thrift-tools codegen <path/to/your/definition-file.thrift>
+npx thrift-tools codegen <path/to/your/definition-file.thrift>
 ```
 
 This will output TS to your console, which you can then save to a file or do further processing on.
