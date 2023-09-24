@@ -35,11 +35,11 @@ export abstract class AbstractCompactProtocolReader implements ThriftReader {
   readStructKey(): number {
     const b = this.readByte();
     if (b === 0) {
-      this.fieldIdStack.pop();
+      this.fieldId = this.fieldIdStack.pop()! || 0;
       return 0;
     }
-    const protocolType: CompactProtocolType = b & 0x0f;
-    const modifier = (b & 0x000000f0) >>> 4;
+    const protocolType: CompactProtocolType = b & 0xf;
+    const modifier = b >>> 4;
     if (modifier === 0) {
       // This is a new field ID.
       this.fieldId = this.readI16();
@@ -48,11 +48,17 @@ export abstract class AbstractCompactProtocolReader implements ThriftReader {
       this.fieldId += modifier;
     }
 
+    // TODO: could remove this 'bool' logic - make struct parser do it
+    // becomes inconsistent with binary protocol?
+
     if (protocolType === 1) {
       this.pendingBool = true;
+      return (this.fieldId << 8) + 2; // pretend this is `false` for a read
+
     } else if (protocolType === 2) {
       this.pendingBool = false;
     }
+
     return (this.fieldId << 8) + protocolType;
   }
 
@@ -64,8 +70,8 @@ export abstract class AbstractCompactProtocolReader implements ThriftReader {
     if (b === 0) {
       return 0;
     }
-    const protocolType: CompactProtocolType = b & 0x0f;
-    const modifier = (b & 0x000000f0) >>> 4;
+    const protocolType: CompactProtocolType = b & 0xf;
+    const modifier = b >>> 4;
     if (modifier === 0) {
       this.skipVarint();
     }
@@ -80,11 +86,11 @@ export abstract class AbstractCompactProtocolReader implements ThriftReader {
 
   readListHeader(): { type: number; length: number } {
     const head = this.readByte();
-    let length = (head >>> 4) & 0x0000000f;
+    let length = head >>> 4;
     if (length === 15) {
       length = Math.max(0, this.readVarint32()); // too long
     }
-    return { type: head & 0x0000000f, length };
+    return { type: head & 0xf, length };
   }
 
   readMapHeader(): { mkey: number; length: number } {

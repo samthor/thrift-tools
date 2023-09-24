@@ -117,7 +117,7 @@ function constructReaderFor(rc: RenderContext, o: ObjectType) {
 
   if (switchCode.length === 0) {
     // special-case no valid fields
-    lines = [`input.skip(12);`, `return this;`];
+    lines = [`input.skip(${CompactProtocolType.CT_STRUCT});`, `return this;`];
   } else {
     lines = [
       `input.readStructBegin();`,
