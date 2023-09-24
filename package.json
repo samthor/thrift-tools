@@ -3,20 +3,29 @@
     "@types/moo": "^0.5.5",
     "@types/node": "^20.3.1",
     "esbuild": "^0.18.4",
+    "moo": "^0.5.2",
     "tsx": "^3.9.0",
-    "moo": "^0.5.2"
+    "typescript": "^5.2.2"
   },
   "type": "module",
   "scripts": {
-    "test": "tsx test/"
+    "test": "tsx test/",
+    "prepublishOnly": "./build.sh"
   },
   "bin": {
     "thrift-tools": "./dist/bin/index.js"
   },
   "exports": {
-    ".": "./dist/index.js",
-    "./codegen": "./dist/codegen.js"
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/types/entrypoint/index.d.ts"
+    },
+    "./codegen": {
+      "import": "./dist/codegen.js",
+      "types": "./dist/types/entrypoint/codegen.d.ts"
+    }
   },
+  "types": "./dist/types/entrypoint/index.d.ts",
   "main": "./dist/index.js",
   "author": "Sam Thorogood <sam.thorogood@gmail.com>",
   "license": "Apache-2.0",

@@ -9,3 +9,5 @@ for X in src/entrypoint/*.ts; do
   FILENAME="${BASE%.*}"
   esbuild --platform=node --bundle --format=esm --outfile=dist/${FILENAME}.js src/entrypoint/${BASE}
 done
+
+tsc --emitDeclarationOnly -d --outDir dist/types src/entrypoint/*.ts --target esnext

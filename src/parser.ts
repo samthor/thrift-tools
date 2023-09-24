@@ -1,6 +1,9 @@
 import * as moo from 'moo';
 
-const lexer = moo.default.compile({
+// @ts-ignore
+const mood = moo.default;
+
+const lexer = mood.compile({
   ws: /[ \t]+/,
   newline: { match: '\n', lineBreaks: true },
   comma: ',',
