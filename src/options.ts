@@ -16,4 +16,12 @@ export type RenderOptions = {
    */
   toolImport?: string;
 
+  /**
+   * Whether to include code to write the Thrift-encoded data (otherwise, this just reads). This
+   * code ends up being quite weighty, so only include it if you need to.
+   *
+   * @default false
+   */
+  includeWriter?: boolean;
+
 };

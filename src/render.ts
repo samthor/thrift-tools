@@ -22,6 +22,7 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
       {
         zeroInstance: true,
         toolImport: 'thrift-tools',
+        includeWriter: false,
       },
       sourceOptions,
     ),
@@ -60,11 +61,17 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
       );
 
       // reader
-      const r = constructReaderFor(rc, o);
-      const innerLines = r.split('\n');
+      const readerLines = constructReaderFor(rc, o);
       lines.push(`  read(input: ThriftReader): ${name} {`);
-      lines.push(...innerLines.map((x) => (`    ` + x).trimEnd()));
+      lines.push(...readerLines.map((x) => (`    ` + x).trimEnd()));
       lines.push(`  }`);
+
+      if (rc.options.includeWriter) {
+        const writerLines = constructWriterFor(rc, o);
+        lines.push(`  write(output: ThriftWriter): ${name} {`);
+        lines.push(...writerLines.map((x) => (`    ` + x).trimEnd()));
+        lines.push(`  }`);
+      }
 
       lines.push(`}`);
 
@@ -77,28 +84,65 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
     return lines.join('\n') + '\n\n';
   });
 
-  let preamble = '';
+  // Generate the optional preamble. This imports from the `toolImport` path, by default this
+  // package's default exports, for helpers (or possibly just types).
+
+  let imports: string[] = [];
+  let typeOnly = false;
 
   if (rc.hasList || rc.hasMap) {
-    // Only include the used readList/readMap.
-    const options = [
-      'type ThriftReader',
-      rc.hasList ? 'readList' : '',
-      rc.hasMap ? 'readMap' : '',
-    ].filter((x) => x);
-    preamble = `import { ${options.join(', ')} }`;
+    // has at least one of list/map (and will have struct) and needs helpers
+    imports.push('type ThriftReader');
+    rc.hasList && imports.push('readList');
+    rc.hasMap && imports.push('readMap');
+
+    if (rc.options.includeWriter) {
+      imports.push('type ThriftWriter');
+      rc.hasList && imports.push('writeList');
+      rc.hasMap && imports.push('writeMap');
+    }
   } else if (rc.hasStruct) {
-    // We only need the type for TS
-    preamble = `import type { ThriftReader }`;
-  } else {
-    // no preamble here \o/
+    // no list/map but still has structs, import the types
+    typeOnly = true;
+    imports.push('ThriftReader');
+    if (rc.options.includeWriter) {
+      imports.push('ThriftWriter');
+    }
   }
 
-  if (preamble) {
-    preamble += ` from ${JSON.stringify(rc.options.toolImport)};\n\n`;
+  if (imports.length) {
+    const leftPart = `import ` + (typeOnly ? 'type ' : '');
+    const importPart = '{ ' + imports.join(', ') + ' }';
+    const preamble = leftPart + importPart + `from ${JSON.stringify(rc.options.toolImport)}\n\n`;
     parts.unshift(preamble);
   }
+
   return parts.join('');
+}
+
+function constructWriterFor(rc: RenderContext, o: ObjectType) {
+  const lines = [
+    `output.writeStructBegin();`,
+
+    ...Object.entries(o.records).map(([name, or]) => {
+      const t = typeToTS(rc, or.type);
+      let lines = [
+        `output.writeStructKey(${t.thrift}, ${or.fieldId});`,
+        t.writer(`this.${name}`) + ';',
+      ];
+
+      if (!or.required) {
+        lines = lines.map((x) => '  ' + x);
+        lines.unshift(`if (this.${name} !== undefined) {`);
+        lines.push('}');
+      }
+
+      return lines;
+    }),
+
+    `output.writeStructKey(0, 0);`,
+  ].flat();
+  return lines;
 }
 
 function constructReaderFor(rc: RenderContext, o: ObjectType) {
@@ -110,7 +154,7 @@ function constructReaderFor(rc: RenderContext, o: ObjectType) {
     lines.push(`    case ${key}:`);
     lines.push(`      this.${name} = ${t.reader};`);
     lines.push('      break;');
-    return lines.join('\n');
+    return lines;
   });
 
   let lines: string[];
@@ -134,13 +178,14 @@ function constructReaderFor(rc: RenderContext, o: ObjectType) {
     ];
   }
 
-  return lines.join('\n');
+  return lines;
 }
 
 type ConvertedType = {
   type: string;
   default: string;
   reader: string;
+  writer: (v: string) => string;
   thrift: CompactProtocolType;
 };
 
@@ -155,6 +200,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'number',
         default: '0',
         reader: 'input.readByte()',
+        writer: (x) => `output.writeByte(${x})`,
         thrift: CompactProtocolType.CT_BYTE,
       };
 
@@ -163,6 +209,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'number',
         default: '0',
         reader: 'input.readI16()',
+        writer: (x) => `output.writeI16(${x})`,
         thrift: CompactProtocolType.CT_I16,
       };
 
@@ -171,6 +218,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'number',
         default: '0',
         reader: 'input.readI32()',
+        writer: (x) => `output.writeI32(${x})`,
         thrift: CompactProtocolType.CT_I32,
       };
 
@@ -179,6 +227,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'number',
         default: '0',
         reader: 'input.readI64()',
+        writer: (x) => `output.writeI64(${x})`,
         thrift: CompactProtocolType.CT_I64,
       };
 
@@ -187,6 +236,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'boolean',
         default: 'false',
         reader: 'input.readBool()',
+        writer: (x) => `output.writeBool(${x})`,
         thrift: CompactProtocolType.CT_BOOLEAN_FALSE_OR_TYPE,
       };
 
@@ -195,6 +245,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'Uint8Array',
         default: 'new Uint8Array()',
         reader: 'input.readBinary()',
+        writer: (x) => `output.writeBinary(${x})`,
         thrift: CompactProtocolType.CT_BINARY,
       };
 
@@ -203,6 +254,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'Uint8Array',
         default: 'new Uint8Array()',
         reader: 'input.readUUID()',
+        writer: (x) => `output.writeUUID(${x})`,
         thrift: CompactProtocolType.CT_UUID,
       };
 
@@ -211,6 +263,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
         type: 'string',
         default: `''`,
         reader: 'input.readString()',
+        writer: (x) => `output.writeString(${x})`,
         thrift: CompactProtocolType.CT_BINARY,
       };
   }
@@ -227,6 +280,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
       type,
       default: `${type}.${first[0]}`,
       reader: 'input.readI32()',
+      writer: (x) => `output.writeI32(${x})`,
       thrift: CompactProtocolType.CT_I32,
     };
   }
@@ -243,6 +297,7 @@ function typeToTS(rc: RenderContext, type: string | TemplateType): ConvertedType
     type,
     default: structDefault,
     reader: structReader,
+    writer: (x) => `${x}.write(output)`,
     thrift: CompactProtocolType.CT_STRUCT,
   };
 }
@@ -262,6 +317,8 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
         type: `Map<${key.type}, ${value.type}>`,
         default: `new Map()`,
         reader: `readMap(input, ${mkey}, () => ${key.reader}, () => ${value.reader})`,
+        writer: (x) =>
+          `writeMap(output, ${mkey}, ${x}, (k) => ${key.writer('k')}, (v) => ${value.writer('v')})`,
         thrift: CompactProtocolType.CT_MAP,
       };
     }
@@ -271,10 +328,12 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
         break;
       }
       rc.hasList = true;
+      const [etype] = inner;
       return {
-        type: `Set<${inner[0].type}>`,
+        type: `Set<${etype.type}>`,
         default: 'new Set()',
-        reader: `new Set(readList(input, ${inner[0].thrift}, () => ${inner[0].reader}))`,
+        reader: `new Set(readList(input, ${etype.thrift}, () => ${etype.reader}))`,
+        writer: (x) => `writeList(output, ${etype.thrift}, ${x}, (e) => ${etype.writer('e')})`,
         thrift: CompactProtocolType.CT_SET,
       };
     }
@@ -289,6 +348,7 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
         type: `Array<${etype.type}>`,
         default: '[]',
         reader: `readList(input, ${etype.thrift}, () => ${etype.reader})`,
+        writer: (x) => `writeList(output, ${etype.thrift}, ${x}, (e) => ${etype.writer('e')})`,
         thrift: CompactProtocolType.CT_LIST,
       };
     }

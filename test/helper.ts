@@ -20,9 +20,10 @@ export async function convertToImportUrl(s: string) {
   return `data:text/javascript;charset=utf-8;base64,${btoa(transformOut.code)}`;
 }
 
-export async function prepareRenderThrift(s: string) {
+export async function prepareRenderThrift(s: string, writer?: boolean) {
   const ts = renderThrift(s, {
     toolImport: compilerDepsImport,
+    includeWriter: writer,
   });
   const js = await convertToImportUrl(ts);
   return import(js);

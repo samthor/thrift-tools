@@ -22,7 +22,6 @@ test('read and import a simple thrift', async (t) => {
   const mod = await prepareRenderThrift(source);
 
   const codegen = renderThrift(source);
-  console.info({ codegen });
 
   const x = new mod.forTest();
   assert.deepStrictEqual(x.foo, undefined, 'optional fields start undefined');

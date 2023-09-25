@@ -10,6 +10,10 @@ const { values, positionals } = parseArgs({
     toolImport: {
       type: 'string',
     },
+    includeWriter: {
+      type: 'boolean',
+      short: 'w',
+    },
     help: {
       type: 'boolean',
       short: 'h',
@@ -20,6 +24,7 @@ const { values, positionals } = parseArgs({
 if (values.help || positionals.length !== 2 || positionals[0] !== 'codegen') {
   process.stderr.write('usage: thrift-tools codegen [path]\n');
   process.stderr.write('  --toolImport="thrift-tools": where to include needed helpers from\n');
+  process.stderr.write('  --includeWriter/-w:          include code to write, not just read\n');
   process.exit(values.help ? 0 : 1);
 }
 

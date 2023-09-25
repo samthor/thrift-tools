@@ -61,6 +61,27 @@ export interface ThriftReader {
 }
 
 /**
+ * Required to write Thrift encoded data.
+ */
+export interface ThriftWriter {
+  writeStructBegin(): void;
+  writeStructKey(type: CompactProtocolType, fieldId: number): void;
+
+  writeListHeader(type: CompactProtocolType, length: number): void;
+  writeMapHeader(mkey: number, length: number): void;
+
+  writeBool(v: boolean): void;
+  writeByte(v: number): void;
+  writeI16(v: number): void;
+  writeI32(v: number): void;
+  writeI64(v: number): void;
+  writeDouble(v: number): void;
+  writeBinary(v: Uint8Array): void;
+  writeUUID(v: Uint8Array): void;
+  writeString(v: string): void;
+}
+
+/**
  * Helper to read a {@link Map}. Used by codegen created by `thrift-tools`.
  */
 export function readMap<K, V>(
@@ -107,4 +128,12 @@ export function readList<T>(
     out[i] = reader();
   }
   return out;
+}
+
+export function writeMap() {
+  throw new Error('TODO');
+}
+
+export function writeList() {
+  throw new Error('TODO');
 }
