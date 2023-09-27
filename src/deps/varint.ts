@@ -35,6 +35,18 @@
 const TWO_TO_32 = 4294967296;
 
 /**
+ * Writes a varint. Returns the new value of `at`.
+ */
+export function writeVarint(v: number, buffer: Uint8Array | Array<number>, at = 0) {
+  while (v > 127) {
+    buffer[at++] = (v & 127) | 128;
+    v >>>= 7;
+  }
+  buffer[at++] = v;
+  return at;
+}
+
+/**
  * Decodes a varint, but limited to 32 bits. Throws otherwise.
  */
 export function readVarint32(readByte: () => number): number {
@@ -70,7 +82,7 @@ export function readVarint32(readByte: () => number): number {
     return x >>> 0;
   }
 
-  throw new TypeError(`Too much data for int32`);
+  throw new TypeError(`Too much data for int32: ${x} temp=${temp}`);
 }
 
 export function readZigZagVarint32(readByte: () => number): number {

@@ -6,10 +6,8 @@ You're here because you need to work with its format.
 This package includes a code generator that builds TypeScript classes from ".thrift" definition files, and helpers to read the compact binary Thrift format into those classes so you can get your job done.
 It doesn't need native code, and is fast, typesafe and easy to use.
 
-<small>
-Originally, this project was written to parse the Thrift format used in Parquet.
+⚠️ Originally, this project was written to parse [Parquet's header definition](https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrift).
 It does not aim to support _all_ of the Thrift format but features can be requested if you need them.
-</small>
 
 ## Usage
 
@@ -27,6 +25,8 @@ npx thrift-tools codegen <path/to/your/definition-file.thrift>
 This will output TS to your console, which you can then save to a file or do further processing on.
 The output code imports some helpers from this package `thrift-tools`, which you can bundle in a build.
 
+You can add support for writing the Thrift classes by adding '-w', but this adds a lot of size that you might not need.
+
 You can also import the parser programatically:
 
 ```ts
@@ -41,7 +41,7 @@ If your project is pure JS, you'll need to rewrite the generated file at this po
 ### Using Generated Code
 
 The generated code will typically contain a number of `class` definitions.
-The simple example abvove will export `class Foo` with two properties.
+The simple example above will export `class Foo` with two properties.
 
 To read a `Foo` from a buffer, you can import a concrete parser and read from a buffer:
 
@@ -76,12 +76,18 @@ const double = reader.readDouble();
 
 For example, the [`Message`](https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md#message) in Thrift is just a number of adjacent types, rather than a `struct` on the wire.
 
+## Code Size
+
+Building and bundling [Parquet's header definition](https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrift), along with the needed boilerplate to read from a buffer, adds about ~16k (~3.5k gzipped) to your bundle.
+This size mostly comes from retaining all the names of fields.
+
 ## Unsupported Features
 
 These tools don't yet support:
 
 - const in thrift files
 - service definitions
+- typedefs
 - lots of other things
 
 I'm happy to accept requests.

@@ -1,4 +1,5 @@
 import { CompactProtocolType, ThriftWriter } from './compiler-deps.js';
+import { writeVarint } from './varint.js';
 
 const enc = new TextEncoder();
 
@@ -9,10 +10,12 @@ export abstract class AbstractCompactProtocolWriter implements ThriftWriter {
   private pendingBoolFieldId?: number;
 
   abstract writeBytes(v: Uint8Array): void;
-  abstract writeByte(v: number): void;
 
   private writeVarint32(v: number): void {
-    throw new Error('TODO: writeVarint32');
+    // TODO: This is probably not very fast.
+    const varintBuffer = new Uint8Array(8);
+    const length = writeVarint(v, varintBuffer);
+    this.writeBytes(varintBuffer.slice(0, length));
   }
 
   writeStructBegin(): void {
@@ -22,6 +25,7 @@ export abstract class AbstractCompactProtocolWriter implements ThriftWriter {
 
   writeStructKey(type: CompactProtocolType, fieldId: number): void {
     if (type === 0) {
+      this.writeByte(0);
       this.fieldId = this.fieldIdStack.pop()! || 0;
       return;
     }
@@ -73,16 +77,25 @@ export abstract class AbstractCompactProtocolWriter implements ThriftWriter {
     }
   }
 
+  writeByte(v: number) {
+    const b = new Uint8Array([v]);
+    this.writeBytes(b);
+  }
+
   writeI16(v: number): void {
-    throw new Error('TODO: zigzag varint write');
+    this.writeI32(v);
   }
 
   writeI32(v: number): void {
-    throw new Error('TODO: zigzag varint write');
+    this.writeVarint32(((v << 1) ^ (v >> 31)) >>> 0);
   }
 
   writeI64(v: number): void {
-    throw new Error('TODO: zigzag varint write');
+    if (v > 2147483647) {
+      // TODO: can't bitshift >32bit
+      throw new Error('TODO: zigzag varint write 64bit');
+    }
+    this.writeI32(v);
   }
 
   writeDouble(v: number): void {
@@ -109,5 +122,50 @@ export abstract class AbstractCompactProtocolWriter implements ThriftWriter {
 
   writeString(v: string): void {
     this.writeBinary(enc.encode(v));
+  }
+}
+
+/**
+ * A concrete implementation of {@link ThriftWriter} which is probably not very fast.
+ */
+export class CompactProtocolWriter extends AbstractCompactProtocolWriter {
+  private out: Uint8Array;
+  private _at: number;
+
+  constructor(buffer = new Uint8Array(), at = 0) {
+    super();
+    this.out = buffer;
+    this._at = at;
+  }
+
+  private maybeExpand(req = 1) {
+    if (this._at + req <= this.out.length) {
+      return;
+    }
+    const prev = this.out;
+    this.out = new Uint8Array((prev.length + 1) * 2);
+    this.out.set(prev, 0);
+  }
+
+  writeBytes(v: Uint8Array): void {
+    if (!v.length) {
+      return;
+    }
+    this.maybeExpand(v.length);
+    this.out.set(v, this._at);
+    this._at += v.length;
+  }
+
+  writeByte(v: number): void {
+    this.maybeExpand();
+    this.out[this._at++] = v;
+  }
+
+  get at() {
+    return this._at;
+  }
+
+  render(): Uint8Array {
+    return this.out.subarray(0, this._at);
   }
 }

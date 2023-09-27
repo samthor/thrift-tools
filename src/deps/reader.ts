@@ -238,7 +238,7 @@ export class CompactProtocolReader extends AbstractCompactProtocolReader {
   }
 
   readByte(): number {
-    return this.buf[this.at++];
+    return this.buf[this.at++] ?? 0;
   }
 
   readBytes(size: number): Uint8Array {
@@ -323,7 +323,7 @@ export class CompactProtocolReaderPoll extends AbstractCompactProtocolReader {
 
   readByte(): number {
     this.ensure(1);
-    const out = this.pending[this.at];
+    const out = this.pending[this.at] ?? 0;
     ++this.at;
     ++this._consumed;
     return out;

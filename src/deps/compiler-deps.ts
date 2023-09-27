@@ -130,10 +130,19 @@ export function readList<T>(
   return out;
 }
 
-export function writeMap() {
-  throw new Error('TODO');
-}
-
-export function writeList() {
-  throw new Error('TODO');
+/**
+ * Helper to write a {@link Map}.
+ */
+export function writeMap<K, V>(
+  output: ThriftWriter,
+  mkey: number,
+  data: Map<K, V>,
+  kwriter: (k: K) => void,
+  vwriter: (v: V) => void,
+) {
+  output.writeMapHeader(mkey, data.size);
+  for (const [k, v] of data.entries()) {
+    kwriter(k);
+    vwriter(v);
+  }
 }

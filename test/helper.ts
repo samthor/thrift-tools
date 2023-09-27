@@ -17,6 +17,7 @@ export async function convertToImportUrl(s: string) {
     format: 'esm',
     loader: 'ts',
   });
+
   return `data:text/javascript;charset=utf-8;base64,${btoa(transformOut.code)}`;
 }
 

@@ -98,7 +98,6 @@ export function renderThrift(tf: ThriftFile | string, sourceOptions: RenderOptio
 
     if (rc.options.includeWriter) {
       imports.push('type ThriftWriter');
-      rc.hasList && imports.push('writeList');
       rc.hasMap && imports.push('writeMap');
     }
   } else if (rc.hasStruct) {
@@ -333,7 +332,7 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
         type: `Set<${etype.type}>`,
         default: 'new Set()',
         reader: `new Set(readList(input, ${etype.thrift}, () => ${etype.reader}))`,
-        writer: (x) => `writeList(output, ${etype.thrift}, ${x}, (e) => ${etype.writer('e')})`,
+        writer: buildIteratorWriter(etype),
         thrift: CompactProtocolType.CT_SET,
       };
     }
@@ -348,7 +347,7 @@ function templateTypeToTS(rc: RenderContext, type: TemplateType): ConvertedType 
         type: `Array<${etype.type}>`,
         default: '[]',
         reader: `readList(input, ${etype.thrift}, () => ${etype.reader})`,
-        writer: (x) => `writeList(output, ${etype.thrift}, ${x}, (e) => ${etype.writer('e')})`,
+        writer: buildIteratorWriter(etype),
         thrift: CompactProtocolType.CT_LIST,
       };
     }
@@ -369,4 +368,10 @@ function cooerceDefault(type: string, cand: string | number) {
     return Boolean(cand);
   }
   return String(cand);
+}
+
+function buildIteratorWriter(etype: ConvertedType) {
+  return (x: string) =>
+    `(output.writeListHeader(${etype.thrift}, ${x}.length), ` +
+    `${x}.forEach((e) => ${etype.writer('e')}))`;
 }
