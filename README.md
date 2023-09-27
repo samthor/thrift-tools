@@ -81,6 +81,11 @@ For example, the [`Message`](https://github.com/apache/thrift/blob/master/doc/sp
 Building and bundling [Parquet's header definition](https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrift), along with the needed boilerplate to read from a buffer, adds about ~16k (~3.5k gzipped) to your bundle.
 This size mostly comes from retaining all the names of fields.
 
+## A Note On Integers
+
+This code doesn't use `bigint`, so will explode if you operate on numbers greater than 53 bits (JS' limit).
+If this _actually_ hurts you in practice let me know.
+
 ## Unsupported Features
 
 These tools don't yet support:
