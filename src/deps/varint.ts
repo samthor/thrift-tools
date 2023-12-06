@@ -32,7 +32,8 @@
  * @fileoverview varint helpers derived from Google's Protocol Buffers library.
  */
 
-const TWO_TO_32 = 4294967296;
+const ONE_TO_32 = 4294967296;
+const ONE_TO_31 = 2147483648;
 
 /**
  * Writes a varint. Returns the new value of `at`.
@@ -137,11 +138,17 @@ export function readZigZagVarint53(readByte: () => number) {
   }
 
   lowBits >>>= 1;
-  lowBits |= (highBits & 0x01) << 31; // shift highBits 0 to lowBits 31
+
+  // TODO: this naïve approach makes lowBits be -(2^31) because JS treats shifts as signed 32-bit ops
+  // lowBits |= (highBits & 0x01) << 31; // shift highBits 0 to lowBits 31
+
+  if (highBits & 0x01) {
+    lowBits += ONE_TO_31;
+  }
   highBits >>>= 1;
 
   if (highBits & 0x3ff80000) {
     throw new RangeError(`got int > 53 bits of data`);
   }
-  return (highBits * TWO_TO_32 + lowBits) * signFlip;
+  return (highBits * ONE_TO_32 + lowBits) * signFlip;
 }
